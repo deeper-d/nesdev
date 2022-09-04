@@ -1,0 +1,13 @@
+
+// 小端模式, 例如 把 158 处理为 [0, 1]
+con loEndOfInt = function(num) {
+    num = int(num)
+    var hi = num >> 8
+    var lo = num & 255
+    var v = [lo, hi]
+    return v
+}
+
+var intOfLoEnd = function(lo, hi) {
+    return (hi << 8) + lo
+}

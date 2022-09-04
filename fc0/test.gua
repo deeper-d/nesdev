@@ -1,0 +1,66 @@
+// con util = import('fctile.gua')
+
+// con __main = function() {
+//     // var tiles = util.tiles('./zoye-fc0/app0.nes')
+//     // util.displayBg(tiles)
+
+//     var balloontiles = dataFromFile('./zoye-fc0/balloon.tile')
+//     log('ball == ', balloontiles.length())
+// }  
+
+// 思路
+//== 一、实现 fc0.gua , 它能把 app0.fc0 编译为 app0.nes
+    // 1.先打印看看 官方exe程序 把 app0.asm 編譯成 的 app0.nes 里的內容
+    // 2.实现 fc0.gua
+    // 实现思路：
+        // 1.app0.fc0 涉及到的语句：
+            // .header
+            // .tiles
+            // .offset
+            // @label
+            // jump
+        // 2.app0.nes 的数据是三部分组成 16 + 16k + 8K, 写入和生成 app0.nes 文件
+
+
+//== 二、实现 nes0.gua 它能运行 app0.nes 文件
+
+con util = import('util.gua')
+
+
+con __main = function() {
+
+    // 官方生成的nes文件
+    var nes = dataFromFile('app0.nes')
+    log('官方 nes ', nes.length())
+
+    // 16 字节文件头
+    // var 文件头 = nes.sub(0, 16)
+    // log('文件头', 文件头)
+    // 文件头 [78, 69, 83, 26, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+    // // ; 16k 程序
+    // var 程序 = nes.sub(16, 16 + 16 * 1024)
+    // // log('程序', 程序.length(), 程序)
+    // // [76, 0, 128, 255, 255, 255, .... 255, 0, 128, 255, 255] 
+    // //  4c 00  80 
+    // // [0, 128] = 32768
+
+    // // ; 8k 图块数据
+    // var 图块 = nes.sub(16 + 16 * 1024, 16 + 24 * 1024)
+    // // log('图块', 图块)
+
+
+    con fc0 = import('fc0.gua')
+    con nes0 = import('nes0.gua')
+
+    // // 編譯 fc0.gua 文件
+    var codes =  fc0.compile('app0.fc0')
+    
+    // 運行 app0.nes 文件
+    var fc = nes0.FC.new('app0.nes')
+    fc.run(100)
+
+    ensure(fc.register.pc == 32768, 'err')
+    
+
+}

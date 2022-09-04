@@ -1,0 +1,267 @@
+// nes0.gua 它能运行 app0.nes 文件
+
+var maxlimit = 65535
+
+
+
+con intToBinary = function(num) {
+    var result = []
+
+    if (num < 0) {
+        return num
+    }
+
+    // 使用 do while 解决 num 等于 0 的情况
+    while (num > 0) {
+        var temp = num % 2
+        if (temp == 0) {
+            result.add('0')
+        } else {
+            result.add('1')
+        }
+        num = math.floor(num / 2)
+    }
+
+    var l = result.length()
+    if (l < 8) { //补全位数 0000.0000
+        for(var i = 0; i < 8 - l; i += 1) {
+            result.add('0')     //不够的就在前面补0
+        }
+    }
+   
+    // 反转数组
+    result.reverse()
+
+    // 拼合成字符串
+    var bin = 0b
+    for (i, e in result) {
+        bin += e
+    }
+    
+    // log('bin : ', bin)
+    return int(bin)
+}
+
+con shiftRight = function(val, base) {
+    return val >> base
+}
+
+// 小端模式, 例如 把 158 处理为 [0, 1]
+con loEndOfInt = function(num) {
+    num = int(num)
+    var hi = num >> 8
+    var lo = num & 255
+    var v = [lo, hi]
+    return v
+}
+
+var intOfLoEnd = function(lo, hi) {
+    return (hi << 8) + lo
+}
+
+con registerSet = function(reg, val) { // [lo, hi] | num
+    // [0, 1] => 258
+    if (type(val) != type(1)) {
+        val = intOfLoEnd(val[0], val[1])
+    } 
+    this.register[reg] = val
+}
+
+con registerGet = function(reg) {
+    return this.register[reg]
+}
+
+con registerGetInt = function(reg) {
+    return this.register[reg]
+}
+
+con registerGetLo = function(reg) {
+    // 获取 寄存器的 低位
+    var val = this.register[reg]
+    var lo = val & 255
+    return lo
+}
+
+
+
+ con FC = class() {
+
+    con new = function(path) {
+        var this.register = { // 十进制表示
+            'pc': 0,
+            'A': 0,
+        }
+
+        var this.regMap = ['pc', 'A', 'a2', 'a3', 'c1', 'f1']
+
+        // memory 初始化
+        var this.memory = this.initMemory(path)
+
+        var this.stepMap = {
+            '76': [3, this.jump],
+            '169': [2, this.set],
+        }
+    
+    }
+
+    // 初始化 內存
+    con this.initMemory = function(path) {
+        // 讀取 appo.nes 中的二進制數據
+        var bytes = dataFromFile(path)
+        var programStart = 16
+        var programEnd = 16 + 16 * 1024
+        var header = bytes.sub(0, programStart)
+        var program = bytes.sub(programStart, programEnd)
+        var tile =  bytes.sub(programEnd)
+        // 讀取程序開始的位置，改變寄存器中 pc 的值
+        var entrance = intOfLoEnd(program[-4], program[-3])
+        registerSet('pc', entrance)
+
+        var memory = []
+        for (var i = 0; i <= maxlimit; i+=1) {
+            // 前 10 K 是一些数据的保留位置
+            if (i < 10 * 1024) {
+                memory.add(0)
+            }
+            // 從 10k 開始存儲 header 和 tile 數據
+            else if (i == 10 * 1024) {
+                
+                memory.extend(header)
+                memory.extend(tile)   
+            } 
+            else if (i >= 10 * 1024 + 16 + 8 * 1024 and i < entrance) {
+                memory.add(0)
+            }
+            // 后面 32k 用来存储程序
+            // 32-48k 存儲程序
+            else if (i == entrance) {
+                log('i == entrance', i, memory.length(), program.sub(0, 30))
+                memory.extend(program)
+            } 
+            // 48-64k复制程序
+            else if (i == entrance + 16 * 1024) {
+                memory.extend(program)
+            }
+        }
+        log('memory length : ', memory.length())
+        return memory
+    }
+
+
+    con this.set = function(p, errcallback) {
+        var reg = 'A'
+        var val = p[1]
+        registerSet(reg, [val, 0])
+    }
+
+    con this.jump = function(phrase, errcallback) {
+        var lo = phrase[1]
+        var hi = phrase[2]
+        var target_pa = intOfLoEnd(lo, hi)
+        registerSet('pc', target_pa)
+    }
+
+    con this.updatePc = function(pc) {
+        var op = this.memory[pc] + ''
+        var step = this.stepMap[op][0]
+        registerSet('pc', pc + step)
+    }
+
+    con this.runCode = function(pc, errcallback) { 
+        // pc 是 old pc, 所以要加 step
+        var op = this.memory[pc] + ''
+        // 切出当前的指令段
+        var step = this.stepMap[op][0]
+        var phrase = this.memory.sub(pc, pc + step)
+        // 执行
+        this.stepMap[op][1](phrase, errcallback)
+    }
+
+    // 運行
+    con run = function(codeNum) {
+        var runNum = 0
+
+        while(true) {
+            // 运行的指令条数 等于 codeNum 就停止运行
+            if (codeNum and runNum == codeNum) {
+                break
+            }
+            runNum += 1
+
+            // --------------- 
+            // 运行逻辑 
+            // ---------------
+            // 1. 从 pc 存储的地址中拿到指令
+            var pc = registerGetInt('pc')
+            // 终止条件
+            if (this.memory[pc] == 255) {
+                break
+            }
+            // 2. 先增加 pc 的值
+            this.updatePc(pc)
+            // 3. 然后模拟执行代码
+            this.runCode(pc, function(err) {
+                if (err) {
+                    log('run error, message is : ', err)
+                    break
+                }
+            })
+        }
+    }
+
+    // 繪圖
+    con display = function() {
+        /* 
+        为 AxePU 增加一个 display 方法
+
+        使用方法是先调用 run 执行代码再调用 display 显示
+
+        我们为虚拟机增加一个显示屏，显示屏的像素是 10x10
+        因此内存的最后 100 个字节用于表示屏幕上的内容，每个字节表示一个像素，从左到右从上到下
+        也就是说内存 156 存储了屏幕左上角第一个像素的颜色，具体表示方法见下方机器码例子
+        程序通过设置这 100 个字节的内存来控制屏幕的显示
+
+        3w - 4w 是显存
+        */
+
+        var w = 500
+        var h = 500
+
+        var running = false
+
+        GuaCanvas.init(w, h)
+
+        // 设置事件回调
+        // GuaCanvas.onEvent(event)
+
+        while (GuaCanvas.running() and running == false) {
+            GuaCanvas.updateEvents()
+
+            // 画图
+            GuaCanvas.clear()
+
+             // 显示屏的像素是 100x100， 每个字节表示一个像素
+             var pixSize = 100
+             // 放大显示, 一个像素可以显示为 5 px
+             var scaleSize = 5
+
+             for (var i = 0; i < pixSize; i += 1) { // y 坐标
+                 for (var j = 0; j < pixSize; j += 1) { // x 坐标
+                     var addr = 30000 + (j + (i * 100)) // 30000 + (x + y * 100)
+                     var color = this.memory[addr]
+                     var x = j * scaleSize
+                     var y = i * scaleSize
+                     var w = scaleSize
+                     var h = scaleSize
+
+                    if (color) {
+                        // log('画图!!!!!! ', x, y, addr, color)
+                        GuaCanvas.rect(x, y, w, h, color, 0, 0, color)
+                    }
+                 }
+             }
+
+            GuaCanvas.show()
+        }
+    }
+}

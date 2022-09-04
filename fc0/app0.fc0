@@ -1,0 +1,30 @@
+    ; 参考 app0.asm 来理解本程序
+    ; 然后写一个 fc0.gua 编译我们这个 fc0 汇编程序
+    ; 这个汇编程序就是 app0.asm 的一比一翻译
+    ; 只是用了我们自定义的语法
+
+    ; .header .tiles 引入二进制文件
+    ; 文件  offset  length
+    ; 16400 = 16 + 16*1024
+    ; 8192 = 8*1024
+    ; balloon.nes 文件本压缩包没有提供
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+
+    ; fc 程序在内存中是从 0x8000 开始的
+    ; 我们生成的代码的地址 offset 要从 0x8000 开始
+    ; 所以这里用 .offset 表示目前是地址 0x8000 了
+.offset 0x8000 
+
+
+
+@__main:
+@mainLoop:
+    jump @mainLoop
+
+
+
+; 入口中断向量规定为 @__main
+; 所以就不用显式地写出来了

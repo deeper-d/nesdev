@@ -1,0 +1,44 @@
+作业 fc.0
+
+
+交作业目录
+fc/fc0.gua
+fc/nes0.gua
+
+
+群文件中有 zoye-fc0.7z 文件
+
+
+作业内容：
+本次的作业是
+0, 阅读 zoye-fc0.7z 里的描述文件
+1, 实现 fc0.gua 它能把 app0.fc0 编译为 app0.nes
+2, 实现 nes0.gua 它能运行 app0.nes 文件
+
+
+ --------- fc0.gua 文件要求如下:
+fc0.gua 文件中需要实现 compile 函数
+compile 接受一个字符串参数 path，它是 .fc0 文件的路径
+compile 返回生成的 .nes 文件的内容（数字数组，每个元素是 1 字节数字），不要写入文件
+
+
+gua: 机器码有 16k，未使用的部分用 255 填充
+
+
+
+--------- gua: nes0.gua 文件要求如下:
+// 遵循下面的用法
+var fc = FC.new('app0.nes')
+
+// 参数表示运行多少条指令
+// 运行完指定数量的指令后 run 方法要返回
+fc.run(1)
+
+
+// 因为 app0.nes 里面是 jump @__main
+ensure(fc.register.pc == 32768)
+
+
+// 再运行 100 条指令，输出还是一样
+fc.run(100)
+ensure(fc.register.pc == 32768)

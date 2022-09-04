@@ -1,0 +1,18 @@
+gua:
+作业 fc.1
+
+
+交作业目录
+fc/fc1.gua
+fc/nes1.gua
+
+
+群文件中有 zoye-fc1.7z 文件
+
+
+作业内容：
+本次的作业是
+0, 阅读 zoye-fc1.7z 里的描述文件
+1, 实现 fc1.gua
+2, 实现 nes1.gua 它能运行 fc1.gua 编译生成的 app1.nes 文件
+gua: fc1.gua 文件要求同 fc0.gua 一样
