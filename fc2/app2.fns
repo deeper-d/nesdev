@@ -1,0 +1,6 @@
+; app2.asm
+__main                           = $8000
+ButtonA                          = $8030
+ButtonAEnd                       = $8045
+__nmi                            = $8026
+mainLoop                         = $8023

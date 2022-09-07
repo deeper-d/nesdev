@@ -1,0 +1,25 @@
+
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+
+.define ppu.control     0x2000
+.define ppu.mask        0x2001
+.define oam.address     0x2003
+.define oam.data        0x2004
+.define pad.1           0x4016
+
+
+
+.offset 0x8000
+
+
+@__main:
+    set a 0
+    
+@mainLoop:
+    jump @mainLoop
+@__nmi:
+    return_from_interrupt
+

@@ -1,0 +1,98 @@
+    ; 参考 app2.asm 来理解本程序
+    ; 然后写一个 fc2.gua 编译我们这个 fc2 汇编程序
+    ; 这个汇编程序就是 app2.asm 的一比一翻译
+    ; 只是用了我们自定义的语法
+
+    ; 这个 fc2 程序中我们增加了几个新指令
+    ; 自行对照翻译
+
+
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+
+.define ppu.control     0x2000
+.define ppu.mask        0x2001
+.define oam.address     0x2003
+.define oam.data        0x2004
+.define pad.1           0x4016
+
+
+
+.offset 0x8000
+
+
+@__main:
+        ; 设置 ppu 状态
+        ; ------------------------------ 
+        ;这里设置 2000 的 bit7 为 1 表示【每帧要调用一个回调函数（称之为 vblank 中断，也叫做 nmi）】
+        ;----------------------------------
+    set a 0b1000.0000   ;169, 128,
+    save a ppu.control  ;141, 0, 32
+
+        ;-------------------开启精灵图
+    set a 0b0001.0000   ;169, 16
+    save a ppu.mask     ;141, 1, 32
+
+
+        ; ----------------
+        ;写精灵图信息
+        ;-----------------
+        ; 
+        ; 写入 OAM 地址 0 
+    set a 0             ;169, 0
+    save a oam.address  ;141, 3, 32
+
+        ; 接下来写入 y  index  attribute  x
+        ; y = 16
+    set a 16            ;169, 16
+    save a oam.data     ;141, 4, 32
+
+        ; tile index = 0
+    set a 0             ;169, 0
+    save a oam.data     ;141, 4, 32
+
+        ; attribute = 0
+    set a 0             ;169, 0
+    save a oam.data     ;141, 4, 32
+
+        ; x = 16
+    set a 16            ;169, 16
+    save a oam.data     ;141, 4, 32
+
+    ; 
+@mainLoop: ; 位置是 35, 128,
+    jump @mainLoop      ;76, 35, 128,
+
+
+
+
+    ; @__nmi 和 @__main 一样也是自动会设置好地址的
+    ; ----------------
+    ;写精灵图信息
+    ;-----------------
+@__nmi: ; 位置 是 38, 128
+    set a 1             ;169, 1
+    save a pad.1        ;141, 22, 64
+    set a 0             ;169, 0
+    save a pad.1        ;141, 22, 64
+
+@ButtonA:
+    load pad.1 a        ;173, 22, 64
+    and_a 1             ;41, 1
+    jump_if_equal @ButtonAEnd   ;240, 14
+            ; 下面的逻辑就是 oam[3].x += 1
+        set a 3                 ;169, 3
+        save a oam.address      ;141, 3, 32
+
+        load oam.data a         ;173, 4, 32
+        clear_carry             ;24
+        add_a 1                 ;105, 1
+        save a oam.data         ;141, 4, 32
+
+@ButtonAEnd:
+; halt
+        ;从栈里复原 状态寄存器 和 PC 寄存器并且从中断返回
+    return_from_interrupt       ;64
+

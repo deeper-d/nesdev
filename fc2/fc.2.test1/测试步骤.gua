@@ -1,0 +1,53 @@
+
+/*
+app2.log 是打印出 每一条指令执行结束后寄存器的状态
+
+每一行代表执行一步程序  每条指令的打印的顺序如下
+
+var 顺序 = [
+    '指令',
+    'pc',
+    'a',
+    'x',
+    'zero_flag',
+    'carry_flag',
+    'overflow_flag',
+    'negative_flag',
+]
+*/
+
+const FC = import('nes2').FC
+
+con __main = function() {
+    
+    // 这个程序主要是测试 nmi是否能正确执行
+    // 所以这里  nmi间隔指令数 = 1
+    var fc = FC.new('app2.nes', 1)
+    ensure(fc.register.pc == 0x8000, '指令的起始位置错误')
+
+    var mem = fc.memory
+    // LDA 
+    ensure(mem[fc.register.pc] == 0xa9, '第一个指令错误')
+
+    // 执行一步指令
+    // 执行后 log出来的内容是 
+    // 0xa9 0x8005 0 0 1 0 0 0
+    fc.run(1)
+
+    // RTI
+    ensure(mem[fc.register.pc] == 0x40, '第二个指令错误')
+
+    // 执行一步指令
+    // 执行后 log出来的内容是 
+    // 0x40 0x8005 0 0 1 0 0 0
+    fc.run(1)
+
+
+    // RTI
+    ensure(mem[fc.register.pc] == 0x40, '第三个指令错误')
+    // 执行一步指令
+    // 执行后 log出来的内容是 
+    // 0x40 0x8005 0 0 1 0 0 0
+    fc.run(1)
+    
+}
