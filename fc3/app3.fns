@@ -1,0 +1,4 @@
+; app3.asm
+__main                           = $8000
+__nmi                            = $8054
+mainLoop                         = $8051

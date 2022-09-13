@@ -1,0 +1,134 @@
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+.define ppu.control     0x2000
+.define ppu.mask        0x2001
+.define ppu.status      0x2002
+.define oam.address     0x2003
+.define oam.data        0x2004
+.define ppu.scroll      0x2005
+.define ppu.address     0x2006
+.define ppu.data        0x2007
+.define oam.dma         0x4014
+.define pad.1           0x4016
+
+
+.offset 0x8000 
+
+
+@__main:
+
+        ; setup stack at 0x1FF
+        ; S 寄存器重置为 0xff
+    setup_stack                         ; 154
+
+        ; 设置 ppu 状态
+    set a 0b1001.0000                   ; 169, 0, 144
+    save a ppu.control                  ; 141, 0, 32
+    set a 0b0001.1010                   ; 169, 0, 26,
+    save a ppu.mask                     ; 141, 1, 32
+
+        ; 设置 ppu 写入地址为 2000
+    ; load ppu.status a                   ;  173, 2, 32
+    ; set a 0x20
+    ; save a ppu.address
+    ; set a 0x00
+    ; save a ppu.address
+
+        ; DMA(direct memory access)
+        ; 我们用内存 00-FF 这 256 字节来存放 OAM 数据
+        ; 然后通过一次性拷贝这 256 字节到 OAM 的方式来显示
+        ; 设置 sprite0 的 4 个属性
+    set a 16
+    save a 0
+    set a 0
+    save a 1
+    set a 0
+    save a 2
+    set a 16
+    save a 3
+
+@mainLoop:
+    jump @mainLoop                  ; 76, 37, 128
+
+
+@__nmi:
+        ; 下面这 4 行是套路
+        ; 先往 4016 写入 1 再写入 0 
+        ; 然后就可以顺序读取 8 次，来获取到 8 个按键的状态
+    set a 1             
+    save a pad.1      
+    set a 0             
+    save a pad.1   
+
+        ; call (JSR) 会把下一条指令的地址减 1 然后存入栈内存
+        ; 然后开始跳转到新地址执行
+    call @update                    ; 32, 47, 128,
+
+    call @draw                      ; 32, 98, 128,
+        ; 
+    return_from_interrupt           ; 64
+
+
+
+    ; update 函数
+@update:
+
+    @ButtonA: 
+        load pad.1 a
+        and_a 1 
+            ; 没按, 就跳到 ButtonAEnd（跳过按键逻辑）
+        jump_if_equal @ButtonAEnd
+            ; 按了,去执行右移代码
+        call @moveRight     ; 32823
+    @ButtonAEnd:            ; 32826
+
+    @ButtonB:               ; 32826
+        load pad.1 a
+        and_a 1
+            ; 没按，就跳到 ButtonAEnd（跳过按键逻辑）
+        jump_if_equal @ButtonBEnd
+            ; 按了, 让 sprite0.x--
+            ; A = sprite0.x
+        load 3 a                ;173 32834
+            ; A -= 1
+            ; sec 是必要的
+
+            ; TODO
+        set_carry               ; 56
+        sub_a 1
+            ; sprite0.x = A
+        save a 3                ; 233
+    @ButtonBEnd:            ; 32843
+
+        ; 我们的 .fc6 程序中 rts 要翻译为 return_from_call
+        ;  rts 会从栈内存中 pop 出一个地址加 1 然后给 pc 跳转回去
+    return_from_call
+
+
+@moveRight:                    ; 32844
+        ; 让 sprite0.x++
+        ; A = sprite0.x
+    load 3 a                   ; 173
+        ; A += 1
+        ; clc 是必要的
+    clear_carry                 ; 24
+    add_a 1                     ; 105
+        ; sprite0.x = A
+    save a 3                    ; 141
+        ; RTS
+    return_from_call            ; 96
+
+    ; draw 函数
+@draw:
+        ;  写入 2003 来设置 OAM DMA 的 lb(low byte)
+    set a 0
+    save a oam.address
+        ; 写入 4014 设置 hb(high byte)
+        ; 然后系统会自动从 hb << 8 + lb 的地址开始读取 256 字节并写入 OAM
+    set a 0
+    save a oam.dma
+
+        ; RTS
+    return_from_call

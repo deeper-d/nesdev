@@ -1,0 +1,1354 @@
+// nes0.gua 它能运行 app0.nes 文件
+
+
+
+
+var maxlimit = 65535
+
+con colorOfPix = function(pix) {
+    // 00  白色
+    // 01  红色
+    // 10  绿色
+    // 11  蓝色
+    var b = 255
+    var color = [
+        [0, 0, 0],
+        [b, 0, 0],
+        [b, b, b],
+        [0, 0, b],
+    ]
+    return color[pix]
+}
+
+
+// 1像素 == 2 bit
+// 最终 16字节（128 bit） 被转成了 64 像素信息
+con joinNums = function(n1, n2) {
+    // 参考下面 3 行例子，来自行推导拼像素的方法
+    // B0  1001 1111
+    // B8  1110 1111
+    //     3221 3333（由 B8 B0 拼成）
+
+    // B1  0000.0001
+    // B9  1100.1000
+    //     2200 2001
+
+    // B7  1111.1110
+    // Bf  0011.0101
+    //     1133 1312
+
+    var b1 = intToBinaryStr(n1)
+    var b2 = intToBinaryStr(n2)
+    var num = 0
+    var nums = []
+    for (var i = 0; i < 8; i+=1) {
+        num = 0
+        num += int(b1[i]) + int(b2[i])
+        if (int(b2[i]) == 1) {
+            num += 1
+        }
+        nums.add(num)
+    }
+    return nums
+
+}
+
+con colorPaletteByIdx = function(idx, spritePalettes) {
+    var palettes = spritePalettes
+    // [
+    //     [0, 17, 18, 19], 
+    //     [0, 20, 21, 22], 
+    //     [0, 23, 24, 25], 
+    //     [0, 26, 27, 28]
+    // ] 
+   
+
+    var colors = [
+        [109, 109, 109, 255],
+        [0, 6, 90, 255],
+        [0, 6, 120, 255],
+        [2, 6, 115, 255],
+        [53, 3, 76, 255],
+        [87, 0, 14, 255],
+        [90, 0, 0, 255],
+        [65, 0, 0, 255],
+        [18, 2, 0, 255],
+        [0, 20, 0, 255],
+        [0, 30, 0, 255],
+        [0, 30, 0, 255],
+        [0, 21, 33, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [157, 157, 157, 255],
+        [109, 218, 0, 255], // 17
+        [0, 72, 255, 255],
+        [145, 0, 255, 255],
+        [182, 0, 255, 255],
+        [255, 0, 145, 255], // 21
+        [255, 0, 0, 255],
+        [218, 109, 0, 255],
+        [145, 109, 0, 255],
+        [36, 145, 0, 255], // 25
+        [0, 145, 0, 255],
+        [0, 182, 109, 255],
+        [0, 145, 145, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [254, 255, 255, 255],
+        [31, 158, 255, 255],
+        [83, 118, 255, 255],
+        [152, 101, 255, 255],
+        [252, 103, 255, 255],
+        [255, 108, 179, 255],
+        [255, 116, 102, 255],
+        [255, 128, 20, 255],
+        [196, 154, 0, 255],
+        [113, 179, 0, 255],
+        [40, 196, 33, 255],
+        [0, 200, 116, 255],
+        [0, 191, 208, 255],
+        [43, 43, 43, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+        [254, 255, 255, 255],
+        [158, 213, 255, 255],
+        [175, 192, 255, 255],
+        [208, 184, 255, 255],
+        [254, 191, 255, 255],
+        [255, 192, 224, 255],
+        [255, 195, 189, 255],
+        [255, 202, 156, 255],
+        [231, 213, 139, 255],
+        [197, 223, 142, 255],
+        [166, 230, 163, 255],
+        [148, 232, 197, 255],
+        [146, 228, 235, 255],
+        [167, 167, 167, 255],
+        [0, 0, 0, 255],
+        [0, 0, 0, 255],
+    ]
+
+    var palette = palettes[idx]
+    var color = []
+    for(i, e in palette) {
+        color.add(colors[e]) 
+    }
+    return color
+}
+
+
+con tiles = function(nes) {
+    /*
+    path 是 DonkeyKong.nes 文件的路径
+
+    返回 nes 文件包含的 512 个 tile 的数组（长度 512）
+
+    数组中每个 tile 用一个长度 64 的数组表示
+    tile 数组中存储的是包含 0 1 2 3 四个像素值的像素数字
+    */
+
+    // image nes 总字节是 8192, 8k
+    var len = nes.length()
+    var tiles = []
+    var origin = []
+    for (var i = 0; i < len; i += 16) {
+        var tile = []
+        var pixData = []
+        for (var j = i; j < i + 8; j += 1) {
+            var n1 = nes[j]
+            var n2 = nes[j + 8]
+            pixData = joinNums(n1, n2)
+            // tile 里此时装的是 64 的像素信息
+            // 1 tile = 16 字节 = 64 像素
+            // 1 像素 = 2 bit 
+            tile.extend(pixData)
+        }
+        tiles.add(tile)
+    }
+    return tiles
+}
+
+con intToHexString = function(intNum) {
+    var pre = '0x'
+    var high = math.floor(intNum / 256)
+    var low = intNum % 256
+    var a = math.floor(high / 16)
+    var b = high % 16
+    var c = math.floor(low / 16)
+    var d = low % 16
+    var map = ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f',]
+    a = map[int(a)]
+    b = map[int(b)]
+    c = map[int(c)]
+    d = map[int(d)]
+    var r1 = '{}{}'.format(a, b)
+    var r2 = '{}{}'.format(c, d)
+    var result = pre + r1 + r2
+    // log('result', result)
+    return result
+}
+
+con intToHexStr = function(intNum) {
+    var high = math.floor(intNum / 256)
+    var low = intNum % 256
+    var a = math.floor(high / 16)
+    var b = high % 16
+    var c = math.floor(low / 16)
+    var d = low % 16
+    var map = ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f',]
+    a = map[int(a)]
+    b = map[int(b)]
+    c = map[int(c)]
+    d = map[int(d)]
+    var r1 = '{}{}'.format(a, b)
+    var r2 = '{}{}'.format(c, d)
+    var result = r1 + r2
+    // log('result', result)
+    return result
+}
+
+con intToHex = function(num) {
+    var result = ''
+    var s = 'ABCDEF'
+    while ( num >= 16) {
+        var k = num%16
+        num = int(math.floor(num/16))
+        if (k > 9) {
+            result += s[k-10]
+        } else {
+            result += k
+        }
+    }
+    if (num > 9) {
+        result += s[num%10]
+    } else {
+        result += num
+    }
+    var str = ''
+    for (var i = result.length() - 1; i >= 0; i-=1) {
+        str += result[i]
+    }
+    str = '0x' + str
+    return str
+}
+
+con intToBinary = function(num) {
+    var result = []
+
+    if (num < 0) {
+        return num
+    }
+
+    // 使用 do while 解决 num 等于 0 的情况
+    while (num > 0) {
+        var temp = num % 2
+        if (temp == 0) {
+            result.add('0')
+        } else {
+            result.add('1')
+        }
+        num = math.floor(num / 2)
+    }
+
+    var l = result.length()
+    if (l < 8) { //补全位数 0000.0000
+        for(var i = 0; i < 8 - l; i += 1) {
+            result.add('0')     //不够的就在前面补0
+        }
+    }
+   
+    // 反转数组
+    result.reverse()
+
+    // 拼合成字符串
+    var bin = 0b
+    for (i, e in result) {
+        bin += e
+    }
+    
+    // log('bin : ', bin)
+    return int(bin)
+}
+
+con intToBinaryStr = function(num) {
+    var result = ""
+    while(num != 0) {
+        var t = num & 1
+        result = "{}{}".format(t, result)
+        num = num >> 1
+    }
+    var len =  result.length()
+    for(var i = 0; i < 8 - len; i+=1) {
+        result = '0' + result
+    }
+
+    return result
+}
+
+con shiftRight = function(val, base) {
+    return val >> base
+}
+
+// 小端模式, 例如 把 158 处理为 [0, 1]
+con loEndOfInt = function(num) {
+    num = int(num)
+    var hi = num >> 8
+    var lo = num & 255
+    var v = [lo, hi]
+    return v
+}
+
+var intOfLoEnd = function(lo, hi) {
+    return lo + (hi << 8)
+}
+
+con registerSet = function(reg, val) { // [lo, hi] | num
+    // [0, 1] => 258
+    if (type(val) != type(1)) {
+        val = intOfLoEnd(val[0], val[1])
+    } 
+    this.register[reg] = val
+}
+
+con registerGet = function(reg) {
+    return this.register[reg]
+}
+
+con registerGetInt = function(reg) {
+    return this.register[reg]
+}
+
+con registerGetLo = function(reg) {
+    // 获取 寄存器的 低位
+    var val = this.register[reg]
+    var lo = val & 255
+    return lo
+}
+
+con setRegisterP = function(bitx, condition) {
+    var reg = 'P'
+    var b = 7 - bitx
+    //
+    var pStr = intToBinaryStr(registerGet(reg))
+    var pArr = []
+    for (var i = 0; i < pStr.length(); i+=1) {
+        pArr.add(pStr[i])
+    }
+    //
+    if (condition) {
+        pArr[b] = '1'
+    } else {
+        pArr[b] = '0'
+    }
+    //
+    var _pStr = ''
+    for (var i = 0; i < pArr.length(); i+=1) {
+        _pStr += pArr[i]
+    }
+    var int = int('0b{}'.format(_pStr))
+    registerSet(reg, int)
+    // return _pStr
+}
+
+con getRegisterP = function(bitx) {
+    var reg = 'P'
+    var b = 7 - bitx
+    var pStr = intToBinaryStr(registerGet(reg))
+    return pStr[b]
+}
+
+
+
+ con FC = class() {
+
+    con new = function(path, nmi间隔指令数) {
+        var this.register = { // 十进制表示
+                // 程序计数器 2-byte
+                // PC: 0, 
+            'pc': 0,
+
+                // 算数寄存器 byte-wide 1字节
+            'A': 0, 
+
+                // 栈寄存器 初始值 0xff, 0xff(255) + 0x100(256) = 0x01ff (511) 就是实际CPU会操作的栈地址
+                // 压栈的时候，数据会存到地址 0x01ff 然后 S 变成 0x01fe
+                // 实际上初始值应该是 0xfd
+            'S': 0xff, 
+
+                // 状态寄存器 
+                // 7654 3210
+                // ---- ----
+                // NVss DIZC
+                // |||| ||||
+                // |||| |||+- Carry
+                // |||| ||+-- Zero
+                // |||| |+--- Interrupt Disable
+                // |||| +---- Decimal
+                // ||++------ No CPU effect, see: the B flag
+                // |+-------- Overflow
+                // +--------- Negative
+            'P': 0b0000.0000,  
+
+                // 比较的结果， 0 相等， 1 小于， 2 大于
+            'C': 0, 
+                // X 寄存器
+            'X': 0,
+                // Y 寄存器 
+            'Y': 0,
+        }
+
+        // 表示多少个指令触发一次 nmi 中断
+        var this.nmi间隔指令数 = nmi间隔指令数
+
+        // init memory 
+        var bytes = dataFromFile(path)
+        var this.memory = this.initMemory(bytes)
+
+        // pc 指向到程序开始位置 [this.memory[0xfffc], this.memory[0xfffd]]
+        this.register.pc = this.read2(0xfffc)
+
+        // OAM 是一个长度 256 字节的特殊内存
+        var this.oam = this.initOam()
+        var this.oamAddress = 0
+
+        // ppu 的 16 k 显存
+        var this.videoMemory = this.initVideoMemory(bytes)
+        // natable 位于显存地址的 $2000（8K、8192）
+        var this.ppuAddress = 0
+
+        // 存储 8 个键的状态值： 0没按 ， 1按了
+        var this.keyboardStatus = [0, 0, 0, 0, 0, 0, 0, 0]
+        
+        // 变量在内存中存储的地址
+        var this.variableOffset = 0
+
+         // 记录运行了多少条指令
+         var this.cycles = 0
+         var this.tempCount = 0
+    
+         var this.stepMap = {
+            '76': [3, this.jump, 'JMP', 'ABS'],
+            '169': [2, this.set, 'LDA', 'IMM'],
+            '141': [3, this.save, 'STA', 'ABS'],
+            '173': [3, this.load, 'LDA', 'ABS'],
+            '41': [2, this.and_a, 'AND', 'IMM'],
+            '240': [2, this.jump_if_equal, 'BEQ', 'REL'],
+            '24': [1, this.clear_carry, 'CLC', 'IMP'],
+            '105': [2, this.add_a, 'ADC', 'IMM'],
+            '64': [1, this.return_from_interrupt, 'RTI', 'IMP'],
+
+            // NES4
+            '162': [2, this.set_x, 'LDX', 'IMM'], 
+            '189': [3, this.load_with_offset_x, 'LDA', 'ABX'],
+            '232': [1, this.increase_x, 'INX', 'IMP'],
+            '224': [2, this.compare_x, 'CPX', 'IMM'],
+            '208': [2, this.jump_if_not_equal, 'BNE ', 'REL'],
+            '154': [1, this.setup_stack, 'TXS', 'IMP'],
+            '32': [3, this.call, 'JSR ', 'ABS'],
+            '56': [1, this.set_carry, 'SEC', 'IMP'],
+            '233': [2, this.sub_a, 'SBC', 'IMM'],
+            '96': [1, this.return_from_call, 'RTS ', 'IMP'],
+
+
+
+
+
+        }
+    }
+
+    // 初始化 內存
+     // 初始化 內存
+     con this.initMemory = function(bytes) {
+        var programStart = 16
+        var programEnd = 16 + 16 * 1024
+        var program = bytes.sub(16, 16 + 16 * 1024)
+        var tile =  bytes.sub(programEnd)
+        // 程序開始的位置
+        var entrance = intOfLoEnd(program[-4], program[-3])
+
+        var memory = []
+        for (var i = 0; i <= maxlimit; i+=1) {
+            // fc 有 2k 内存（也就是 8 个 256 内存）是可以用于存储数据的
+            // page 0 - page 7
+            // cpu 把 page1 的 256 字节当做栈
+
+            // 0-32 k 先不管
+            if (i < 32 * 1024) {
+                memory.add(0)
+            }
+            // 32-48k 存儲程序
+            else if (i == 32 * 1024) {
+                memory.extend(program)
+            } 
+            // 48-64k 复制程序
+            else if (i == 48 * 1024) {
+                memory.extend(program)
+            }
+        }
+
+
+        log(' memory.length :: ', memory.length() / 1024)
+        return memory
+    }
+
+    con this.initOam = function() {
+        var oam = []
+        for (var i = 0; i < 256; i += 1) {
+            if (i % 4 == 0) {
+                oam.add(240)
+            } else {
+                oam.add(0)
+            }
+        }
+        return oam
+    }
+
+    con this.initVideoMemory = function(bytes) {
+        // The PPU addresses a 16kB space, $0000-3FFF, completely separate from the CPU's address bus. 
+        // It is either directly accessed by the PPU itself, or via the CPU with memory mapped registers at $2006 and $2007.
+
+        // The NES has 2kB of RAM dedicated to the PPU, normally mapped to the nametable address space from $2000-2FFF, 
+        // but this can be rerouted through custom cartridge wiring.
+
+        // Address range	Size	Description
+        // $0000-$0FFF	$1000	Pattern table 0
+        // $1000-$1FFF	$1000	Pattern table 1
+        // $2000-$23FF	$0400	Nametable 0
+        // $2400-$27FF	$0400	Nametable 1
+        // $2800-$2BFF	$0400	Nametable 2
+        // $2C00-$2FFF	$0400	Nametable 3
+        // $3000-$3EFF	$0F00	Mirrors of $2000-$2EFF
+        // $3F00-$3F1F	$0020	Palette RAM indexes
+        // $3F20-$3FFF	$00E0	Mirrors of $3F00-$3F1F
+
+        // ppu 拥有 16k 的内存，也就是显存
+        var tiles = bytes.sub(16 + 16 *1024)
+        var vm = []
+        var patternStart = 0
+        var patternLen = 8 * 1024
+        for (var i = 0; i < 16 * 1024; i += 1) {
+            if (i == 0) {
+                //  8k 图块叫做 pattern table
+                // 存在在显存中的 0-1fff 的地方
+                // 前面 256 个 tile 的显存地址是 0000-0fff, 这叫 pattern table 0
+                // 后面 256 个 tile 的显存地址是 1000-1fff, 这叫 pattern table 1
+                vm.extend(tiles) 
+            } else if (i >= 0x2000 and i <  0x2000 + 960) {
+                // nametable 开始地址是显存地址 2000, 前 960 是每个图块的下标
+                vm.add(36)
+            } else if (i >= 0x2000 + 960) {
+                vm.add(0)
+            }
+        }
+        log(' vm.length :: ', vm.length() / 1024)
+        return vm 
+    }
+
+    
+    con this.log = function() {
+        // pc的值  当前opcode  指令名  寻址模式  a寄存器的值  s寄存器的值  p寄存器的值  x寄存器的值  y寄存器的值  用寻址模式计算出来的地址
+        // F461    F0           BEQ    REL       00          F4           00100110    FF          FF           F45F
+        var pc = intToHexStr(this.register.pc) 
+        var op = intToHexStr(this.memory[pc]) 
+        var opStr = this.memory[pc] + ''
+        var 指令名 = this.stepMap[op][2]
+        var 寻址模式 = this.stepMap[op][3]
+        var a = intToHexStr(this.register.A)
+        var s = intToHexStr(this.register.S)
+        var p = intToBinaryStr( this.register.P)
+        var x = intToHexStr(this.register.X)
+        var y = intToHexStr(this.register.Y)
+        var 用寻址模式计算出来的地址 = intToHexStr(0)
+        return `{} {} {} {} {} {} {} {} {} {} {} {}`.format(pc, op, 指令名, 寻址模式, a, s, p, x, y, 用寻址模式计算出来的地址)
+
+    }
+
+
+    con read2 = function(addr) {
+        var mem = this.memory
+        var reg = this.register
+        var value = mem[addr] + (mem[addr + 1] << 8)
+        if (addr == 0x4016) {
+            log('pad.1', value)
+            // 根据 pad.1 中的值，就是按钮的下标（共 8 个）
+            // 然后用下标从 this.keyboardStatus 中取 按钮状态(0 | 1)
+            var key = value
+            reg.a = this.keyboardStatus[key]
+            // 每次操作加 1, 如此顺序读取 8 次，就能获取到 8 个按键的状态
+            mem[0x4016] += 1
+            log('当前读取 第 {} 个按钮, 按钮是否被按：{}'.format(val, this.keyboardStatus[key]))
+        } else if (addr == 0x2002) {
+            // 写入 2006 之前先读取一次 2002(PPUSTATUS) 来重置 PPUADDR 的写入状态 ??
+            log('ppu.status', value)
+            mem[0x2002] = 0
+        } else if (addr == 0x2004) {
+            log('oam.data', value)
+            var data = this.oam[this.oamAddress]
+            reg.a = data
+        }        
+        return value
+    }
+
+    con read1 = function(addr) {
+        var mem = this.memory        
+        return mem[addr]
+    }
+
+    con white1 = function(addr, value) {
+        ensure(value < 0x100, 'value err')
+        var mem = this.memory
+        if (addr == 0x2001) {
+            log('ppu.mask', value)
+            mem[addr] = value
+        } else if (addr == 0x2003) {
+            log('oam.addr', value)
+            this.oamAddress = value
+        } else if (addr == 0x2004) {
+            log('oam.data', value)
+            var index = this.oamAddress
+            this.oam[index] = value
+            this.oamAddress += 1
+        }
+        else {
+            mem[addr] = value
+        }
+        
+    }
+
+    con this.jump = function(p) {
+        var lo = p[1]
+        var hi = p[2]
+        var target_pa = intOfLoEnd(lo, hi)
+        registerSet('pc', target_pa)
+    }
+
+    
+    con this.set = function(p) {
+        // LDA #%00010000
+        // set a 16
+        // 169, 16
+        // --------------
+        var reg = 'A'
+        var val = p[1]
+        registerSet(reg, val)
+        // --------------- 
+        // P REGISTER: A,Z,N = M
+        // Z
+        setRegisterP(1, val == 0)
+        // N
+        setRegisterP(7, (val & 0xff) >> 7 == 1)
+    }
+
+    // 注意内存地址是十六位, 但是 save 只存‘单字节’
+    con this.save = function(p) {
+        // STA $2001
+        // save a ppu.mask
+        // 141, 1, 32
+        var reg = 'A'
+        var val = registerGetLo(reg)
+        var address = intOfLoEnd(p[1], p[2])
+        var exData = this.memory[address]
+        this.memory[address] = val
+
+        if (address == 0x4016) {
+            log('save 4016 == ', val)
+        }
+        
+        // 0x2004 OAMDATA
+        if (address == 0x2004) {
+            // 1.把值存入 oam 内存段
+            var index = this.oamAddress
+            log('save a oam.data-------- ', index)
+            this.oam[index] = val
+            // 2.oam.address + 1
+            this.oamAddress += 1
+            log('this.oamAddress == ', this.oamAddress)
+        } 
+        // 0x2003 oam.address 
+        else if (address == 0x2003) {
+            this.oamAddress = val
+        } 
+        // 2007（PPUDATA）
+        else if (address == 0x2007) {
+            // 1.把值存进 namatable 内存段
+            var index = this.ppuAddress
+            this.videoMemory[index] = val
+            log('把值存进 namatable 内存段: ', val)
+            // 2.ppu.address + 1
+            this.ppuAddress += 1
+            log('this.ppuAddress + 1: ', this.ppuAddress, this.videoMemory.sub(0x2000, 0x2000 + 10))
+        } 
+        // 2006(PPUADDR)
+        else if (address == 0x2006) {
+            log('exData', exData)
+            if (exData != 0) {
+                var hi = exData
+                var lo = val
+                log('设置 ppu address =  ', lo + hi << 8, intToHexString(lo + hi << 8))
+                this.ppuAddress = lo + hi << 8
+                this.memory[address] = 0
+            }
+        } 
+        // oam.dma 0x4014
+        else if (address == 0x4014) {
+            // ; 我们用内存 00-FF 这 256 字节来存放 OAM 数据
+            // ; 然后通过一次性拷贝这 256 字节到 OAM 的方式来显示
+            // ; 这是更好更方便的方法
+            //  ------------------------------------------------------
+            // ; 先写入 2003 来设置 OAM DMA 的 lb(low byte)
+            // ; 然后写入 4014 设置 hb(high byte)
+            // ; 然后系统会自动从 (hb << 8) + lb 的地址开始读取 256 字节并写入 OAM
+            log('----------------------- oam.dma ---------------------')
+            var lo = this.oamAddress
+            var hi = val
+            var memoOamAddr = hi << 8 + lo
+            var memoOam = this.memory.sub(memoOamAddr, memoOamAddr + 256)
+            for (var i = 0; i < 256; i+=1) {
+                if (memoOam[i] != 0) {
+                    this.oam[i] = memoOam[i]
+                }
+            }
+            log(' oam.dma 0x4014 一次性拷贝操作: ',  this.oam.sub(0, 16))
+        }
+        
+    }
+
+    con this.load = function(p) {
+        // LDA
+        // load pad.1 a
+        // 173, 22, 64
+        var addr = intOfLoEnd(p[1], p[2])
+        var val = this.memory[addr]
+        var reg = 'A'
+        this.register[reg] = val
+
+        // 读取  pad.1 按钮的状态到 A 寄存器
+        if (addr == 0x4016) {
+            // 根据 @0x4016 中的值，判断当前读的是哪个按钮，从按钮对应的内存中取按钮状态(0 | 1)
+            // 8 个按钮状态 暂时从 this.keyboardStatus 中取
+            var key = val
+            log('this.load :: val key == ', key)
+            this.register[reg] = this.keyboardStatus[key]
+            // 每次操作加 1, 如此顺序读取 8 次，就能获取到 8 个按键的状态
+            this.memory[0x4016] += 1
+            log('当前读取 第 {} 个按钮, 按钮是否被按：{}'.format(val, this.keyboardStatus[key]))
+        }
+        // oam.data
+        else if (addr == 0x2004) {
+            var data = this.oam[this.oamAddress]
+            this.register[reg] = data
+        }
+        // ppu.status
+        else if (addr == 0x2002) {
+            // 写入 2006 之前先读取一次 2002(PPUSTATUS) 来重置 PPUADDR 的写入状态
+        }
+
+        // P REGISTER: A,Z,N = M
+        // Z
+        setRegisterP(1, val == 0)
+        // N
+        setRegisterP(7, (val & 0xff) >> 7 == 1)
+    }
+
+    con this.and_a = function(p) {
+        // AND #%00000001
+        // and_a 1             
+        // 41, 1
+        // 使用内存字节的内容对算数寄存器逐位执行逻辑与
+        var val_a = this.register['A']
+        var val_b = p[1]
+        var val = val_a & val_b
+        log('【 and_a 】 : ', val_a, '&', val_b, ' = ', val)
+
+        // P REGISTER: A,Z,N = A&M
+        // A
+        registerSet('A', val)
+        // Z Set if A = 0
+        setRegisterP(1, val == 0)
+        // N Set if bit 7 set
+        setRegisterP(7, (val & 0xff) >> 7 == 1)
+    }
+
+    con this.jump_if_equal = function(p) {
+        // BEQ ButtonAEnd
+        // jump_if_equal @ButtonAEnd
+        // 240, 14
+        // 看的是 zero flag,
+        log('【jump_if_equal】： ', intToBinaryStr(this.register.P))
+        var zero_flag = getRegisterP(1)     
+        if (zero_flag == '1') {
+            // 没有按按钮，跳走
+            // 注意 相对跳转是一个有符号数
+            var relative_pc = p[1]
+            if (relative_pc > 127) {
+                relative_pc -= 256
+            }
+            this.register['pc'] += relative_pc
+            log('没有 按按钮，直接跳到 ButtonEnd ：：：：', this.register['pc'])
+        } else {
+            // 按了就正常往下执行
+            log('！！！按了 按钮，正常往下执行 ：：：：', this.register['pc'])
+        }
+    }
+
+    con this.clear_carry = function(p) {
+        // Set the carry flag to zero
+        // CLC
+        // 24,
+        setRegisterP(0, false)
+    }
+
+    con this.add_a = function(p) {
+        // ADC #1
+        // ------------           
+        // 105, 1
+        // adds the contents of a memory location to the accumulator together with the carry bit
+        // If overflow occurs the carry bit is set
+        var val_a = this.register['A']
+        var val_b = p[1]
+        // c flag
+        var val_c = 0
+        if (getRegisterP(0) == '1') {
+            val_c = 1
+        }
+        var num = val_a + val_b + val_c
+
+        // 判断进位
+        this.register['A'] = num & 0xff
+
+        // 影响 P(Status flags) 状态寄存器 : A,Z,C,N = A+M+C
+        // C	Carry Flag	Set if overflow in bit 7
+        setRegisterP(0, num > 255)
+        // Z	Zero Flag	Set if A = 0
+        setRegisterP(1, (num & 0xff) == 0)
+        // N
+        setRegisterP(7, (num & 0xff) >> 7 == 1)
+    }
+
+    con stackIn = function(data) {
+        var stack = this.register['S']
+        if (stack == 0xff) {
+            stack = 0x01ff
+        }
+        this.memory[stack] = data
+        this.register['S'] = stack - 1
+    }
+    
+    con stackPop = function() {
+        var stack = this.register['S'] + 1
+        this.register['S'] = stack
+        var data = this.memory[stack]
+        this.memory[stack] = 255
+        return data
+    }
+
+    con this.return_from_interrupt = function(p) {
+        // RTI
+        // 从栈里复原 状态寄存器 和 PC 寄存器并且从中断返回
+        // 1.复原状态器
+        var pReg = this.stackPop()
+        registerSet('P', pReg)
+        log('出栈 ： p register --  ', pReg)
+
+        // 2.复原 PC 寄存器并且从中断返回
+        // lo
+        var lo = this.stackPop()
+        log('出栈 ： lo  ', lo)
+        // hi
+        var hi = this.stackPop()
+        log('出栈 ： hi  ', hi)
+        log('----- 出栈完成 ::: stack是否归位 ？？  ', registerGet('S'))
+        // 返回
+        var pc = intOfLoEnd(lo, hi)
+        registerSet('pc', pc)
+        log('恢复 pc === 跳回地址 ', pc)
+        log('return_from_interrupt ============================================================= umi 检测完成')
+    }
+
+    con this.set_x = function(p) {
+        // LDX #0
+        // set x 0
+        // 162, 0
+        // --------------
+        var val = p[1]
+        registerSet('X', val)
+        // --------------- 
+        // P REGISTER: X,Z,N = M
+        // Z
+        setRegisterP(1, val == 0)
+        // N
+        setRegisterP(7, (val & 0xff) >> 7 == 1)
+    }
+
+    con this.load_with_offset_x = function(p) {
+        // LDA _data_background, x
+        // load_with_offset_x _data_background a
+        // 189, 48, 128,
+        var target_pc = intOfLoEnd(p[1], p[2])
+        var x = this.register['X']
+        var pc = this.register['pc']
+        var val = this.memory[target_pc + x]
+        registerSet('A', val)
+
+        // --------------- 
+        // P REGISTER: A,Z,N = M
+        // Z
+        setRegisterP(1, val == 0)
+        // N
+        setRegisterP(7, (val & 0xff) >> 7 == 1)
+    }
+
+    con this.increase_x = function(p) {
+        // INX
+        // increase_x
+        // 232 
+        var x = this.register['X']
+        this.register['X'] = x + 1
+           
+        // --------------- 
+        // P REGISTER: X,Z,N = X+1
+        // Z
+        setRegisterP(1,  x == 0)
+        // N
+        setRegisterP(7, (x & 0xff) >> 7 == 1)
+    }
+
+    con this.compare_x = function(p) {
+        // CPX 
+        // compare x 0x10 
+        // 224, 16
+        var x = this.register['X']
+        var m = p[1]
+        var val = x - m
+        // --------------- 
+        // P REGISTER: Z,C,N = X-M
+        // C Set if X >= M
+        setRegisterP(0, val > 0)
+        // Z Set if X = M
+        setRegisterP(1,  val == 0)
+        // N
+        setRegisterP(7, (val & 0xff) >> 7 == 1)
+    }
+
+    con this.jump_if_not_equal = function(p) {
+        // BNE
+        // 208, 245
+        var zero_flag = getRegisterP(1)
+        if (zero_flag != '1') {
+            // 因为 dataFromFile 会把原本的 -1 读取为 255， -2 读取为 254 ...所以需要特殊方法判断负数
+            // 注意这里是一个相对跳转， 是有符号数
+            var relative_pc = p[1]
+            if (relative_pc > 127) {
+                relative_pc -= 256
+            }
+            this.register['pc'] += relative_pc
+            log('循环中： jump_if_not_equal ==== ', this.register['pc'])
+        }
+    }
+
+    con this.setup_stack = function(p) {
+        // setup stack at 0x1FF
+        for (var i = 0x1FF; i > 0x1FF - 256; i-=1 ) {
+            this.memory[i] = 0
+        }
+        // S 寄存器重置为 0xff(实际上应该是 0xfd)
+        this.register['S'] = 0xff
+    }
+
+    con this.call = function(p) {
+        // 32 32 138
+        // 1.把下一条指令的地址减 1 然后存入栈内存
+        var pc = this.register['pc'] - 1
+        var lohi = loEndOfInt(pc)
+        // 压栈： 先高后底
+        this.stackIn(lohi[1])
+        this.stackIn(lohi[0])
+
+        // 2.跳转到新地址执行
+        var target_pc = intOfLoEnd(p[1], p[2])
+        this.register['pc'] = target_pc
+
+    }
+
+    con this.set_carry = function(p) {
+        // 56
+        // C = 1
+        setRegisterP(0, '1')
+    }
+
+    con this.sub_a = function(p) {
+        // SBC #1
+        // ------------
+        // sub_a 1             
+        // 233, 1
+        // sub the contents of a memory location to the accumulator together with the carry bit
+        // If overflow occurs the carry bit is set
+        var a = this.register['A']
+        var m = p[1]
+        var c = int(getRegisterP(0))
+        var num = a-m-(1-c)
+
+        // 判断进位
+        this.register['A'] = num & 0xff
+
+        // P REGISTER: A,Z,C,N = A-M-(1-C)
+        // C    Clear if overflow in bit 7
+        setRegisterP(0, num > 255)
+        // Z    Set if A = 0b
+        setRegisterP(1, (num & 0xff) == 0)
+        // V 	Set if sign bit is incorrect
+        // setRegisterP(6, 0 < (a ^ num) & (m ^ num) & (1 << 7))
+        // N
+        setRegisterP(7, (num & 0xff) >> 7 == 1)
+
+        log('this.sub_a === ', num, a, m, c)
+        log('this.sub_a === num & 0xff: ', num & 0xff)
+    
+    }
+
+    con this.return_from_call = function(p) {
+        // 栈内存中 pop 出一个地址加 1 然后给 pc 跳转回去
+        // 出栈：先低后高
+        var lo = this.stackPop()
+        var hi = this.stackPop()
+        // 跳回原来的地址
+        var target_pc = intOfLoEnd(lo, hi) + 1
+        this.register['pc'] = target_pc
+        log('return_from_call 跳回call 之前的地址::: ', target_pc)
+
+    }
+
+
+
+    // ------- 更新 pc ----------
+    con this.updatePc = function(pc) {
+        var op = this.memory[pc] + ''
+        var step = this.stepMap[op][0]
+        registerSet('pc', pc + step)
+    }
+
+    con this.runCode = function(pc) { 
+        // pc 是 old pc, 所以要加 step
+        var op = this.memory[pc] + ''
+        // 切出当前的指令段
+        var step = this.stepMap[op][0]
+        var phrase = this.memory.sub(pc, pc + step)
+        // 执行
+        this.stepMap[op][1](phrase)
+    }
+
+    con prepareNMI = function() {
+        // 【NMI 回调】每帧都会被调用一次 (fc 会在每一帧触发 nmi 中断（回调）)
+        // 我们就可以在这里检查手柄
+        // 回调的具体步骤是: 
+        // 1，保存程序的状态
+        //     1) pc 压栈: 先压 high 8 bit(s), 再压 low 8 bit(s)
+        //     2) 状态寄存器压栈
+        // 2，跳转到 fffa fffb 存储的地址(nmi 中断向量)中去执行回调代码
+
+        // 1.保存程序的状态
+            // 1) pc 压栈
+            // 压栈的时候，数据会存到地址 0x01ff 然后 S 变成 0x01fe
+            var pc = this.register['pc']
+            var lohi = loEndOfInt(pc)
+            log('即将压栈： pc: ', pc, lohi)
+            // 先压 high 8 bit
+            this.stackIn(lohi[1])
+            // 后压 low 8 bit
+            this.stackIn(lohi[0])
+            // 2) 状态寄存器压栈
+            this.stackIn(this.register['P'])
+        // 2，跳转到 fffa fffb 存储的地址(nmi 中断向量)中去执行回调代码
+            var nmiAddr = intOfLoEnd( this.memory[0xfffa], this.memory[0xfffb])
+            registerSet('pc', nmiAddr)
+            log('跳转到 nmi 函数位置 ========= ', nmiAddr, [this.memory[0xfffa], this.memory[0xfffb]])
+    }
+
+    // 運行
+    con run = function(stop) {
+        while(true) {
+            // -------------------------
+            // 执行多少条指令后 被动停止
+            // -------------------------
+            if (stop == 0) {
+                log('>>>>>> 被动停止 >>>>>> ', this.cycles)
+                break
+            }
+
+            stop -= 1
+            this.cycles += 1
+
+            // -------------------------
+            // 主动间歇暂停，交给绘图
+            // -------------------------
+            if (this.cycles % 110 == 0) {
+                log('--- run 主动暂停，交给绘图 ---', this.cycles)
+                break
+            }
+
+            // -------------------------
+            // NMI 回调检测
+            // -------------------------
+            if (this.cycles % this.nmi间隔指令数 == 0) {
+                var PPUCTRL = intToBinaryStr(this.memory[0x2000])
+                log('一次 ======================================================================= umi 检测', this.cycles, ', PPUCTRL: ', PPUCTRL)
+                if (PPUCTRL[0] == '1' or true) {
+                    // nmi 跳转准备工作， 并把 pc 指向 nmi 地址
+                    this.prepareNMI()
+                    continue 
+                }
+            }
+           
+            // --------------- 
+            // 运行逻辑
+            // ---------------
+            // log('【run op: 】【{}】 --------------------'.format(this.memory[registerGetInt('pc')]), ' | pc: ',  registerGetInt('pc'), ', ', intToHex(registerGetInt('pc')), ' | cycle: ', this.cycles)
+            var pc = registerGetInt('pc')
+            if (this.memory[pc] == 255) {
+                break
+            }
+            this.updatePc(pc)
+            this.runCode(pc)
+        }
+    }
+
+
+    
+}
+
+
+con __main = function() {
+    var fc = FC.new('app9.nes', 200)
+
+    // log('int ', intOfLoEnd(0, 2))
+
+    // fc.run(1)
+
+    // return false
+
+    // tiles 数据
+    var tileBytes = fc.videoMemory.sub(0, 8*1024) 
+    var tiles = tiles(tileBytes)
+    var patternTable = [
+        tiles.sub(0, 256),
+        tiles.sub(256),
+    ]
+
+    con displaybackground = function(GuaCanvas, tiles, nameTable) {
+        // nametable 数组中有 1024 个单字节数字
+        // 前面 960 个数字表示屏幕上背景图块的下标
+        // （由于一共有 512 个图块，具体是使用前面 256 个还是后面 256 个，自己试一下就好了）
+        // 后 64 个数字表示每个大图块的颜色
+        var tileIndex = nameTable.sub(0, 960)
+        var scaleSize = 1
+        for(var i = 0; i < tileIndex.length(); i+=1) {
+            var index = tileIndex[i]
+            var tile = tiles[index]
+            // fc 的屏幕分辨率是 256x240，也就是 32x30（960） 个图块（一个图块 8x8 像素）
+            // tile 左边顶点坐标
+            var px = (i % 32) * 8
+            var py = int(math.floor(i / 32)) * 8
+            for (var j = 0; j < tile.length(); j += 1) {
+                var x = (px + j % 8) * scaleSize
+                var y = (py + int(math.floor(j / 8))) * scaleSize
+                var w = scaleSize
+                var h = scaleSize
+                var color = colorOfPix(tile[j])
+                GuaCanvas.rect(x, y, w, h, color[0], color[1], color[2], 255)
+            }
+        }
+    }
+
+    con flipVertically = function(tile, n) {
+        var res = []
+        for (var i = tile.length(); i > 0 ; i-=n) {
+            res.extend(tile.sub(i - n, i)) 
+        }
+        return res
+    }
+    
+    con flipHorizontally = function(tile, n) {
+        var res = []
+        for (var i = 0; i < tile.length(); i+=n) {
+            var row = tile.sub(i, i + n)
+            var reversedRow = row.reverse()
+            res.extend(reversedRow) 
+        }
+        return res
+    
+    }
+    
+
+    con displaySprite = function(GuaCanvas, tiles, oam) {
+        // oam 精灵图数组
+        // 长度 256 的数组，数组中每个元素表示一个字节
+        // 每四个字节表示一个 sprite
+        // 所以共：64 个 sprite
+
+        // 色板一共有 8 个，背景用前四个（0-3），oam 用后四个（4-7, 一共 16 * 2 = 32 字节数据
+        // 存储在 ppu 内存段中： $3F00-$3F1F    $0020    Palette RAM indexes
+        var palettesData = fc.videoMemory.sub(0x3F00, 0x3F00 + 0x20)
+        var palettes = []
+        for(var i = 0; i < palettesData.length(); i+=4) {
+            var p = palettesData.sub(i, i + 4)
+            palettes.add(p)
+        }
+        var spritePalettes = palettes.sub(4)
+        
+
+        var scaleSize = 1
+        for (var i = 0; i < 256; i += 4) {
+            // 每四个字节表示一个 sprite
+            var sprite = oam.sub(i, i + 4)
+            var idx = sprite[1]
+            var tile = tiles[idx]
+            var x = sprite[3]
+            var y = sprite[0] + 1
+            // attribute
+            var attribute = intToBinaryStr(sprite[2])
+            var paletteIdx = int('0b' + attribute.sub(-2))
+            var flip_sprite_vertically = attribute.sub(0, 1)
+            if (flip_sprite_vertically == '1') {
+                tile = flipVertically(tile, 8)
+            }
+            var flip_sprite_horizontally = attribute.sub(1, 2)
+            if (flip_sprite_horizontally == '1') {
+                tile = flipHorizontally(tile, 8)
+            }
+            
+            // tile 左边顶点坐标
+            var px = x
+            var py = y
+            if (i < 15) {
+                log('【{}】 tile x y = '.format(i), px, py)
+            }
+            for (var j = 0; j < tile.length(); j += 1) {
+                var x = (px + j % 8) * scaleSize
+                var y = (py + int(math.floor(j / 8))) * scaleSize
+                var w = scaleSize
+                var h = scaleSize
+                var onepix = tile[j]
+                var colorPalette = colorPaletteByIdx(paletteIdx, spritePalettes)
+                var color = colorPalette[onepix]
+                GuaCanvas.rect(x, y, w, h, color[0], color[1], color[2], 255)
+            }
+        }
+    }
+
+    // canvas 事件回调
+    con event = function(e) {
+
+        log('even--------')
+        log('fc.keyboardStatus',fc.keyboardStatus)
+        con gua_enums = import('guacanvas_enums')
+        con GuaEventType = gua_enums.GuaEventType
+        con GuaMouseButton = gua_enums.GuaMouseButton
+        con GuaKeycode = gua_enums.GuaKeycode
+
+        if (e.type == GuaEventType.keyDown) {
+            // 键盘按下
+            log('key down', e.keycode)
+            // a键按下
+            if (e.keycode == GuaKeycode.key_a) {
+                log('a down')
+                fc.keyboardStatus[0] = 1
+            } else if (e.keycode == GuaKeycode.key_b) {
+                log('b down')
+                fc.keyboardStatus[1] = 1
+            } else if (e.keycode == GuaKeycode.key_right) {
+                log('key_right down')
+                fc.keyboardStatus[7] = 1
+            } else if (e.keycode == GuaKeycode.key_left) {
+                log('key_left down')
+                fc.keyboardStatus[6] = 1
+            }
+        } else if (e.type == GuaEventType.keyUp) {
+            // 键盘弹起
+            log('key up', e.keycode)
+            // a键弹起
+            if (e.keycode == GuaKeycode.key_a) {
+                log('a up')
+                fc.keyboardStatus[0] = 0
+            } else if (e.keycode == GuaKeycode.key_b) {
+                log('b up')
+                fc.keyboardStatus[1] = 0
+            } else if (e.keycode == GuaKeycode.key_right) {
+                log('key_right up')
+                fc.keyboardStatus[7] = 0
+            } else if (e.keycode == GuaKeycode.key_left) {
+                log('key_left up')
+                fc.keyboardStatus[6] = 0
+            }
+        } 
+    }
+     
+    var w = 300
+    var h = 200
+
+    GuaCanvas.init(w, h)
+    // 设置事件回调
+    GuaCanvas.onEvent(event)
+    while (GuaCanvas.running()) {
+        // 更新事件，如果当前帧有事件，在这里面会去调用事件回调
+        GuaCanvas.updateEvents()
+
+        fc.run(1000000000)
+
+        log('run 主动间歇停止，开始画图', fc.oam.sub(0, 5))
+
+        // 判断 PPU.MASK @0x2001
+        var PPUMASK = intToBinaryStr(fc.memory[0x2001])
+        log('PPUMASK ****************** ', PPUMASK)
+        // 判断 ppuctrl 设置图块等信息
+        var PPUCTRL = intToBinaryStr(fc.memory[0x2000])
+        log('PPUCTRL ================== ', PPUCTRL)
+        // 背景使用的 256个 tiles
+        var background = [] 
+        // 精灵图使用的 256个 tiles
+        var sprite = [] 
+        // nametable
+        var nameTable = []
+        
+        // 设置背景
+        if (PPUCTRL[3] == '0') {
+            // bit4 为 0 表示背景使用 pattern table 0s
+            background = patternTable[0]
+        } 
+        if (PPUCTRL[3] == '1') {
+            // bit4 为 1 表示背景使用 pattern table 1
+            background = patternTable[1]
+        }
+        // 设置精灵图
+        if (PPUCTRL[4] == '0') {
+            // bit3 为 0 表示 oam 使用 pattern table 0
+            sprite = patternTable[0]
+        }
+        if (PPUCTRL[4] == '1') {
+            // bit3 为 1 表示 oam 使用 pattern table 1
+            sprite = patternTable[1]
+        } 
+        // bit1 bit0 合起来表示要使用的 nametable 是哪个
+        // (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
+        if (PPUCTRL.sub(-2) == '00') {
+            nameTable = fc.videoMemory.sub(0x2000,  0x2000 + 1024)
+        }
+
+        // 画图
+        GuaCanvas.clear()
+        // 画背景图
+        if (PPUMASK[4] == '1') {
+            log('画背景图 -- ', nameTable.sub(0x2000, 0x2000 + 10))
+            displaybackground(GuaCanvas, background, nameTable)
+        }
+        // 画精灵图
+        if (PPUMASK[3] == '1') {
+            displaySprite(GuaCanvas, sprite, fc.oam)
+        }
+        // GuaCanvas.rect(1, 1, 10, 10, 255, 0, 0, 255)
+        GuaCanvas.show()
+    }
+}
+
+   

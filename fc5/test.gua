@@ -1,0 +1,42 @@
+
+// 思路
+
+
+con __main = function() {
+    var n = '4'
+    
+    // 官方生成的nes文件
+    var nes0 = dataFromFile('app{}.nes'.format(n))
+    var nesApp = nes0.sub(16, 16 + 100)
+    log('官方生成的nes程序==: ', nesApp)
+    
+
+
+
+    // con fc0 = import('fc{}.gua'.format(n))
+    // con nes = import('nes{}.gua'.format(n))
+
+    // // // // 編譯 fc0.gua 文件
+    // var codes =  fc0.compile('app{}.fc{}'.format(n, n))
+    // // var myApp = codes.sub(16, 16 + 100)
+    // // // log('我生成的 nes 程序==: ', myApp)
+
+    // // for (i, e in nesApp) {
+    // //     ensure(e == myApp[i], '两方不一致： {}'.format(i))
+    // // }
+    
+    // // // // 運行 app0.nes 文件
+    // // var fc = nes.FC.new('app{}.nes'.format(n))
+    // // fc.run(1)
+    // // ensure(fc.register.pc == 0x8002, 'run0 err')
+
+    // // fc.run(1)
+    // // ensure(fc.register.pc == 0x8005, 'run1 err')
+
+    // // fc.run(100)
+
+
+    // log('===', 1 & 1)
+
+
+}

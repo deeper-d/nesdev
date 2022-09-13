@@ -1,0 +1,75 @@
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+.define ppu.control     0x2000
+.define ppu.mask        0x2001
+.define ppu.status      0x2002
+.define oam.address     0x2003
+.define oam.data        0x2004
+.define ppu.scroll      0x2005
+.define ppu.address     0x2006
+.define ppu.data        0x2007
+.define pad.1           0x4016
+
+
+.offset 0x8000 
+
+
+@__main:
+        ; 设置 ppu 状态
+    set a 0b10010000        ; 169, 144
+    save a ppu.control      ; 141, 0, 32
+    set a 0b00011010        ; 169, 26
+    save a ppu.mask         ; 141, 1, 32,
+        ; 
+        ; 设置 ppu 写入地址为 2000
+    load ppu.status a       ; 173, 2, 32
+    set a 0x20              ; 169, 32,
+    save a ppu.address      ; 141, 6, 32
+    set a 0x00              ; 169, 0,
+    save a ppu.address      ; 141, 6, 32
+        ; 
+        ; 写入 16 个数据
+        ; 用循环来写入
+    set x 0                 ; 162, 0
+@SetupBGLoop:
+        ; load (_data_background + X)
+        ; 也就是 _data_background + 0
+        ;       _data_background + 1
+        ;       _data_background + ...
+        ;       _data_background + 15
+    
+        ; LDA _data_background, x
+    load_with_offset_x @_data_background a   ; 189, 48, 128,
+        ; STA $2007
+    save a ppu.data                         ; 141, 7, 32
+    increase_x                              ; 232
+        ; compare x with 0x10
+        ; branch if not equal
+        ; 
+        ; CPX #$10
+    compare x 0x10                          ; 224, 16
+        ; BNE SetupBGLoop
+        ; 注意这里也是一个相对跳转
+    jump_if_not_equal @SetupBGLoop          ; 208, 245
+
+    ; 
+    set a 0                                 ; 169, 0
+    save a ppu.scroll                       ; 141, 5, 32
+    save a ppu.scroll                       ; 141, 5, 32
+
+@mainLoop:
+    jump @mainLoop                          ; 76, 44, 128
+
+
+@__nmi:
+    return_from_interrupt                   ; 64
+
+
+@_data_background:
+    ; 注意这里的 .data 表示后面跟的数据是 1 字节的
+    ; 这里有 16 个字节的数据
+    .data 0x10 0x11 0x12 0x3 0x4 0x5 0x6 0x7 0x8 0x9 0xa 0xb 0xc 0xd 0xe 0xf
+                                            ; 16, 17, 18, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+

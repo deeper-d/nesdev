@@ -1,0 +1,33 @@
+
+// 思路
+
+
+con __main = function() {
+    var n = 'a'
+    
+    // // 官方生成的nes文件
+    // var nes0 = dataFromFile('app{}.nes'.format(n))
+    // var nesApp = nes0.sub(16, 16 + 300)
+    // log('官方生成的nes程序==: ', nesApp)
+    var outputs = stringFromFile('output.log').split('\n')
+
+
+    con nes = import('nes{}.gua'.format(10))
+    var fc = nes.FC.new('balloon_zhuozhuo.nes', 5000)
+    var 错误类型 = ['pc的值',  '当前opcode',  '指令名',  '寻址模式',  'a寄存器的值',  's寄存器的值',  'p寄存器的值',  'x寄存器的值',  'y寄存器的值',  '用寻址模式计算出来的地址']
+
+    while (true) {
+        fc.run(1)
+        var index = fc.cycles - 1
+        var logs = fc.logs.split(' ')
+        var expects = outputs[index].split(' ')
+        log('【index: {}】'.format(index))
+        log('mylog  : ', fc.logs)
+        log('expect : ', outputs[index])
+        log('-----------------------------------')
+        for(i, e in expects) {
+            ensure(int(logs[i]) == int(expects[i]), '【{}】 {} | {},  【错误类型 [{}]】：{}'.format(index, logs[i], expects[i], i, 错误类型[i]))
+        }
+    }
+
+}

@@ -1,0 +1,50 @@
+
+// 思路
+//== 一、实现 fc0.gua , 它能把 app0.fc0 编译为 app0.nes
+    // 1.先打印看看 官方exe程序 把 app0.asm 編譯成 的 app0.nes 里的內容
+    // 2.实现 fc0.gua
+    // 实现思路：
+        // 1.app0.fc0 涉及到的语句：
+            // .header
+            // .tiles
+            // .offset
+            // @label
+            // jump
+        // 2.app0.nes 的数据是三部分组成 16 + 16k + 8K, 写入和生成 app0.nes 文件
+
+
+//== 二、实现 nes0.gua 它能运行 app0.nes 文件
+
+// con util = import('util.gua')
+
+
+con __main = function() {
+    var n = '1'
+    
+    // 官方生成的nes文件
+    // var nes = dataFromFile('app{}.nes'.format(n))
+    // log('官方生成的nes文件: ', nes)
+    
+
+
+
+    con fc0 = import('fc{}.gua'.format(n))
+    con nes = import('nes{}.gua'.format(n))
+
+    // // // 編譯 fc0.gua 文件
+    var codes =  fc0.compile('app{}.fc{}'.format(n, n))
+    log('我生成的 nes 文件： ', codes.length())
+    
+    // // 運行 app0.nes 文件
+    var fc = nes.FC.new('app{}.nes'.format(n))
+    fc.run(1)
+    ensure(fc.register.pc == 0x8002, 'run0 err')
+
+    fc.run(1)
+    ensure(fc.register.pc == 0x8005, 'run1 err')
+
+    fc.run(100)
+
+
+
+}

@@ -1,0 +1,72 @@
+    ; 参考 app3.asm 来理解本程序
+    ; 然后写一个 fc3.gua 编译我们这个 fc3 汇编程序
+    ; 这个汇编程序就是 app3.asm 的一比一翻译
+    ; 只是用了我们自定义的语法
+
+
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+    ; 现在 ppu 寄存器基本全了
+.define ppu.control     0x2000
+.define ppu.mask        0x2001
+.define ppu.status      0x2002
+.define oam.address     0x2003
+.define oam.data        0x2004
+.define ppu.scroll      0x2005
+.define ppu.address     0x2006
+.define ppu.data        0x2007
+.define pad.1           0x4016
+
+
+.offset 0x8000 
+
+
+@__main:
+        ; 设置 ppu 状态
+    set a 0b1001.0000
+    save a ppu.control
+    set a 0b0001.1010
+    save a ppu.mask
+        ; 
+        ; 设置 ppu 写入地址为 2000
+    load ppu.status a
+    set a 0x20
+    save a ppu.address
+    set a 0x00
+    save a ppu.address
+        ; 
+        ; 写入 4 个数据
+    set a 0
+    save a ppu.data
+    set a 1
+    save a ppu.data
+    set a 2
+    save a ppu.data
+    set a 3
+    save a ppu.data
+    set a 4
+    save a ppu.data
+    set a 5
+    save a ppu.data
+    set a 6
+    save a ppu.data
+    set a 7
+    save a ppu.data
+    set a 8
+    save a ppu.data
+    set a 9
+    save a ppu.data        
+        ; 
+    set a 0
+    save a ppu.scroll
+    save a ppu.scroll
+
+@mainLoop:
+    jump @mainLoop
+
+
+@__nmi:
+    return_from_interrupt
+

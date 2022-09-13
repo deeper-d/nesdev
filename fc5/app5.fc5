@@ -1,0 +1,54 @@
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+.define ppu.control     0x2000
+.define ppu.mask        0x2001
+.define ppu.status      0x2002
+.define oam.address     0x2003
+.define oam.data        0x2004
+.define ppu.scroll      0x2005
+.define ppu.address     0x2006
+.define ppu.data        0x2007
+.define oam.dma         0x4014
+.define pad.1           0x4016
+
+
+.offset 0x8000 
+
+
+@__main:
+        ; 设置 ppu 状态
+    set a 0b1001.0000
+    save a ppu.control
+    set a 0b0001.1010
+    save a ppu.mask
+        ; 
+        ; 设置 ppu 写入地址为 2000
+    load ppu.status a
+    set a 0x20
+    save a ppu.address
+    set a 0x00
+    save a ppu.address
+        ; 
+        ; 设置 sprite0 的 4 个属性
+    set a 16
+    save a 0
+    set a 0
+    save a 1
+    set a 0
+    save a 2
+    set a 16
+    save a 3
+
+@mainLoop:
+    jump @mainLoop
+
+
+@__nmi:
+    set a 0
+    save a oam.address
+    set a 0
+    save a oam.dma
+    ; 
+    return_from_interrupt

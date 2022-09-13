@@ -1,0 +1,253 @@
+.header balloon.nes 0 16 
+.tiles balloon.nes 16400 8192
+
+
+.define ppu.control     0x2000
+.define ppu.mask        0x2001
+.define ppu.status      0x2002
+.define oam.address     0x2003
+.define oam.data        0x2004
+.define ppu.scroll      0x2005
+.define ppu.address     0x2006
+.define ppu.data        0x2007
+.define oam.dma         0x4014
+.define pad.1           0x4016
+
+
+    ; 这是 fc asm 定义变量的方式
+    ; 我们用 0-ff 存储了 256 字节的 oam 数据
+    ; 100 - 1ff 是系统保留栈
+    ; 所以我们的变量是 200 开始
+    ; 这是标准汇编定义变量的套路
+    ; 用心去感受
+    ; .rsset 标明了变量在内存中的地址
+    ;.rsset 0x0200
+    ; 变量名  .rs  变量长度
+.vars 0x200
+    paddleX 1
+    paddleY 2
+    paddleZ 1
+.vars_end
+
+
+.offset 0x8000 
+
+
+@__main:
+        ; setup stack
+        ; ---------------
+        ; LDX #$FF
+        ; TXS
+    setup                               ; 154
+        ; setup PPU
+    set a 0b1001.0000                   ; 169, 0, 144
+    save a ppu.control                  ; 141, 0, 32
+    set a 0b0001.1010                   ; 169, 0, 26,
+    save a ppu.mask                     ; 141, 1, 32
+
+        ; setup paddle
+    call @setupPaddle
+        ; 这个函数设置了调色板
+    call @setupPalette
+
+@mainLoop:
+    jump @mainLoop                  ; 76, 
+
+
+    ; 我们之前的作业给出了调色板下标表示的颜色值
+    ; 下面的链接中有颜色图，可以有直观的感受（不过本作业不看也一样）
+    ; https://wiki.nesdev.com/w/index.php/PPU_palettes
+@_data_palette:
+        ; 背景和 sprite 各有 4 个调色板
+        ; 所以上面说的 4-7 说的是【调色板一共有 8 个，背景用前四个（0-3），oam 用后四个（4-7）】
+        ; 一共 16 * 2 = 32 字节数据
+        ; nt palette
+    .data 0x0 0x1 0x2 0x3 0x0 0x4 0x5 0x6 0x0 0x7 0x8 0x9 0x0 0xa 0xb 0xc
+        ; oam palette
+    .data 0x0 0x11 0x12 0x13 0x0 0x14 0x15 0x16 0x0 0x17 0x18 0x19 0x0 0x1a 0x1b 0x1c
+
+
+
+    ; 这个函数复制粘贴的 4 个相似代码看起来很蠢
+    ; 为什么不用循环来设置 4 个 sprite?
+@setupPaddle:
+        ; 这里存入 4 个 sprite
+        ; 设置 sprite0 的 4 个属性
+    set a 16
+    save a 0
+    set a 0
+    save a 1
+    set a 0b1000.0000     ; attribute
+    save a 2
+    set a 100
+    save a 3
+
+        ; 设置 sprite1 的 4 个属性
+    set a 16
+    save a 4
+    set a 0
+    save a 5
+    set a 0b0100.0001        ; attribute
+    save a 6
+    set a 18
+    save a 7
+
+    ;     ; 设置 sprite2 的 4 个属性
+    set a 16
+    save a 8
+    set a 0
+    save a 9
+    set a 0b1100.0010         ; attribute
+    save a 10
+    set a 20
+    save a 11
+
+    ;     ; 设置 sprite3 的 4 个属性
+    set a 16
+    save a 12
+    set a 0        
+    save a 13
+    set a 0b0000.0011        ; attribute
+    save a 14
+        ; TODO 为什么这里写28 也和其他sprite的挨着的， 不应该是 22 吗 ？
+        ; 因为 updatepaddle 里有 根据 变量 paddleX 的值，对所有sprite 的 x 坐标做更新
+    set a 28
+    save a 15
+
+        ; RTS
+    return_from_call    
+; 对于示例程序来说，这样写更简单
+    
+; 一个例子只演示一个简单的变化，学习门槛大大降低
+;
+; 不过
+; 你可以试试自己把它优化为一个循环读取 16 字节预定义的数据
+
+
+    ; https://wiki.nesdev.com/w/index.php/PPU_memory_map
+    ; $3F00-$3F1F    $0020    Palette RAM indexes
+@setupPalette:
+        ; read 2002 to reset 2006 high/low 
+    load ppu.status a
+        ; set ppu.addr
+    set a 0x3F
+    save a ppu.address
+    set a 0x00
+    save a ppu.address
+        ; 循环写入 32 字节的调色板
+    set x 0
+    @setupPaletteLoop:
+        load_with_offset_x @_data_palette a   ; 189, 48, 128,
+        save a ppu.data    
+        increase_x
+        compare x 0x20
+        jump_if_not_equal @setupPaletteLoop
+
+        ; RTS
+    return_from_call 
+
+
+
+@__nmi:
+        ; 在 udpateInput 中根据按键计算出 paddle.x 并存入变量 0x200 中
+    call @updateInput
+        ; 在 update 中根据变量 0x200 去设置 4 个 sprite 的 x 坐标 
+    call @update
+        ; 调用 oam dma 画图
+    call @draw
+        ; RTI
+    return_from_interrupt
+
+
+@update:
+    call @updatePaddle
+    return_from_call
+
+
+@updatePaddle:
+        ; a = @200 = 0
+    load paddleX a
+        ;
+    save a 3
+        ; CLC 一定需要吗？
+        ; 不一定
+        ; 但是无脑加上就不用想了
+        ; 真正的天才不会浪费时间做无意义的事情
+        ; 抓大放小才是极限优化
+        ; 常人看来的低级错误只不过是专家的排水渠过弯
+    clear_carry
+        ;ADC #$8
+    add_a 8    
+        ;STA $0007
+    save a 7
+        ;
+    clear_carry
+        ;ADC #$8
+    add_a 8  
+        ;STA $000b
+    save a 11
+        ;
+    clear_carry
+      ;ADC #$8
+    add_a 8  
+        ;STA $000f
+    save a 15
+        ;
+    return_from_call
+
+
+@draw:
+        ;  写入 2003 来设置 OAM DMA 的 lb(low byte)
+    set a 0
+    save a oam.address
+        ; 写入 4014 设置 hb(high byte)
+        ; 然后系统会自动从 hb << 8 + lb 的地址开始读取 256 字节并写入 OAM
+    set a 0
+    save a oam.dma
+        ; RTS
+    return_from_call
+
+
+
+
+@moveLeft:
+    load paddleX a
+    SEC
+    sub_a 1
+    save a paddleX
+    ;
+    return_from_call
+
+@moveRight:
+    load paddleX a
+    clear_carry
+    add_a 1 
+    save a paddleX 
+    ;
+    return_from_call
+
+
+@updateInput:
+        ; 设置读取模式
+    set a 1             ;169, 1
+    save a pad.1        ;141, 22, 64
+    set a 0             ;169, 0
+    save a pad.1        ;141, 22, 64
+
+    @ButtonA: 
+        load pad.1 a
+        and_a 1
+            ; 没按
+        jump_if_equal @ButtonAEnd
+            ; 按了
+        call @moveRight
+    @ButtonAEnd:
+    ;
+    @ButtonB: 
+        load pad.1 a
+        and_a 1
+        jump_if_equal @ButtonBEnd
+        call @moveLeft
+    @ButtonBEnd:
+        ;
+    return_from_call
